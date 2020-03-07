@@ -1096,9 +1096,11 @@ if __name__ == '__main__':
 
         print('Loading model...', end='')
         net = Yolact()
+        print('step1')
         net.load_weights(args.trained_model)
+        print('step2')
         net.eval()
-        print(' Done.')
+        print(' Done All.')
 
         if args.cuda:
             net = net.cuda()
