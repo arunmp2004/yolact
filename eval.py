@@ -133,7 +133,7 @@ coco_cats = {} # Call prep_coco_cats to fill this
 coco_cats_inv = {}
 color_cache = defaultdict(lambda: {})
 
-def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
+def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=.45, fps_str=''):
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
     """
@@ -143,7 +143,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     else:
         img_gpu = img / 255.0
         h, w, _ = img.shape
-    
+
     with timer.env('Postprocess'):
         save = cfg.rescore_bbox
         cfg.rescore_bbox = True
@@ -151,6 +151,9 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                                         crop_masks        = args.crop,
                                         score_threshold   = args.score_threshold)
         cfg.rescore_bbox = save
+    print('args.crop')    
+    cv2.imwrite('output_images/args_crop.png', args.crop)
+    print('args.crop done')
 
     with timer.env('Copy'):
         idx = t[1].argsort(0, descending=True)[:args.top_k]
@@ -187,27 +190,41 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     # First, draw the masks on the GPU where we can do it really fast
     # Beware: very fast but possibly unintelligible mask-drawing code ahead
     # I wish I had access to OpenGL or Vulkan but alas, I guess Pytorch tensor operations will have to suffice
+    # if args.display_masks and cfg.eval_mask_branch and num_dets_to_consider > 0:
+    #     # After this, mask is of size [num_dets, h, w, 1]
+    #     masks = masks[:num_dets_to_consider, :, :, None]
+
+    #     cv2.imwrite('output_images/masks.png', (masks * 255).byte().cpu().numpy());
+
+    #     # Prepare the RGB images for each mask given their color (size [num_dets, h, w, 1])
+    #     colors = torch.cat([get_color(j, on_gpu=img_gpu.device.index).view(1, 1, 1, 3) for j in range(num_dets_to_consider)], dim=0)
+    #     masks_color = masks.repeat(1, 1, 1, 3) * colors * mask_alpha
+
+    #     # This is 1 everywhere except for 1-mask_alpha where the mask is
+    #     inv_alph_masks = masks * (-mask_alpha) + 1
+        
+    #     img_gpu_org = (img_gpu * 255).byte().cpu().numpy()
+    #     cv2.imwrite('output_images/img_gpu_org.png', img_gpu_org);
+
+    #     # I did the math for this on pen and paper. This whole block should be equivalent to:
+    #     #    for j in range(num_dets_to_consider):
+    #     #        img_gpu = img_gpu * inv_alph_masks[j] + masks_color[j]
+        
+    #     masks_color_summand = masks_color[0]
+    #     if num_dets_to_consider > 1:
+    #         inv_alph_cumul = inv_alph_masks[:(num_dets_to_consider-1)].cumprod(dim=0)
+    #         masks_color_cumul = masks_color[1:] * inv_alph_cumul
+    #         masks_color_summand += masks_color_cumul.sum(dim=0)
+
+    #     img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
+
+
     if args.display_masks and cfg.eval_mask_branch and num_dets_to_consider > 0:
-        # After this, mask is of size [num_dets, h, w, 1]
-        masks = masks[:num_dets_to_consider, :, :, None]
-        
-        # Prepare the RGB images for each mask given their color (size [num_dets, h, w, 1])
-        colors = torch.cat([get_color(j, on_gpu=img_gpu.device.index).view(1, 1, 1, 3) for j in range(num_dets_to_consider)], dim=0)
-        masks_color = masks.repeat(1, 1, 1, 3) * colors * mask_alpha
-
-        # This is 1 everywhere except for 1-mask_alpha where the mask is
-        inv_alph_masks = masks * (-mask_alpha) + 1
-        
-        # I did the math for this on pen and paper. This whole block should be equivalent to:
-        #    for j in range(num_dets_to_consider):
-        #        img_gpu = img_gpu * inv_alph_masks[j] + masks_color[j]
-        masks_color_summand = masks_color[0]
-        if num_dets_to_consider > 1:
-            inv_alph_cumul = inv_alph_masks[:(num_dets_to_consider-1)].cumprod(dim=0)
-            masks_color_cumul = masks_color[1:] * inv_alph_cumul
-            masks_color_summand += masks_color_cumul.sum(dim=0)
-
-        img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
+            # After this, mask is of size [num_dets, h, w, 1]
+            masks = masks[:num_dets_to_consider, :, :, None]
+            img_gpu *= (masks.sum(dim=0) >= 1).float().expand(-1, -1, 3)
+    else:
+            img_gpu *= 0
     
     if args.display_fps:
             # Draw the box for the fps on the GPU
@@ -608,7 +625,9 @@ def evalimage(net:Yolact, path:str, save_path:str=None):
         plt.title(path)
         plt.show()
     else:
+
         cv2.imwrite(save_path, img_numpy)
+
 
 def evalimages(net:Yolact, input_folder:str, output_folder:str):
     if not os.path.exists(output_folder):
