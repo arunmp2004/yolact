@@ -206,7 +206,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     #         masks_color_cumul = masks_color[1:] * inv_alph_cumul
     #         masks_color_summand += masks_color_cumul.sum(dim=0)
 
-    #     img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
+    #     img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand 
     
     if args.display_masks and cfg.eval_mask_branch and num_dets_to_consider > 0:
         # After this, mask is of size [num_dets, h, w, 1]
@@ -214,7 +214,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         img_gpu *= (masks.sum(dim=0) >= 1).float().expand(-1, -1, 3)
     else:
         img_gpu *= 0
-    
+
+        
     if args.display_fps:
             # Draw the box for the fps on the GPU
         font_face = cv2.FONT_HERSHEY_DUPLEX
